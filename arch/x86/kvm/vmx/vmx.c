@@ -6280,12 +6280,20 @@ void dump_vmcs(struct kvm_vcpu *vcpu)
  * The guest has exited.  See if we can fix it or if we need userspace
  * assistance.
  */
+
+extern atomic64_t total_exits;
+extern atomic64_t exit_time;
+
 static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	union vmx_exit_reason exit_reason = vmx->exit_reason;
 	u32 vectoring_info = vmx->idt_vectoring_info;
 	u16 exit_handler_index;
+
+	u64 start_time = rdtsc();
+
+	atomic64_inc(&total_exits);
 
 	/*
 	 * Flush logged GPAs PML buffer, this will make dirty_bitmap more
@@ -6344,13 +6352,17 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 			return 1;
 		}
 
-		if (nested_vmx_reflect_vmexit(vcpu))
+		if (nested_vmx_reflect_vmexit(vcpu)) {
+			atomic64_add(rdtsc() - start_time, &exit_time);
 			return 1;
+		}
 	}
 
 	/* If guest state is invalid, start emulating.  L2 is handled above. */
-	if (vmx->emulation_required)
+	if (vmx->emulation_required) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return handle_invalid_guest_state(vcpu);
+	}
 
 	if (exit_reason.failed_vmentry) {
 		dump_vmcs(vcpu);
@@ -6358,6 +6370,7 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 		vcpu->run->fail_entry.hardware_entry_failure_reason
 			= exit_reason.full;
 		vcpu->run->fail_entry.cpu = vcpu->arch.last_vmentry_cpu;
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return 0;
 	}
 
@@ -6367,6 +6380,7 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 		vcpu->run->fail_entry.hardware_entry_failure_reason
 			= vmcs_read32(VM_INSTRUCTION_ERROR);
 		vcpu->run->fail_entry.cpu = vcpu->arch.last_vmentry_cpu;
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return 0;
 	}
 
@@ -6397,6 +6411,7 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 		}
 		vcpu->run->internal.data[ndata++] = vcpu->arch.last_vmentry_cpu;
 		vcpu->run->internal.ndata = ndata;
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return 0;
 	}
 
@@ -6419,30 +6434,46 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 		}
 	}
 
-	if (exit_fastpath != EXIT_FASTPATH_NONE)
+	if (exit_fastpath != EXIT_FASTPATH_NONE) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return 1;
+	}
 
 	if (exit_reason.basic >= kvm_vmx_max_exit_handlers)
 		goto unexpected_vmexit;
 #ifdef CONFIG_RETPOLINE
-	if (exit_reason.basic == EXIT_REASON_MSR_WRITE)
+	if (exit_reason.basic == EXIT_REASON_MSR_WRITE) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return kvm_emulate_wrmsr(vcpu);
-	else if (exit_reason.basic == EXIT_REASON_PREEMPTION_TIMER)
+	}
+	else if (exit_reason.basic == EXIT_REASON_PREEMPTION_TIMER) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return handle_preemption_timer(vcpu);
-	else if (exit_reason.basic == EXIT_REASON_INTERRUPT_WINDOW)
+	}
+	else if (exit_reason.basic == EXIT_REASON_INTERRUPT_WINDOW) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return handle_interrupt_window(vcpu);
-	else if (exit_reason.basic == EXIT_REASON_EXTERNAL_INTERRUPT)
+	}
+	else if (exit_reason.basic == EXIT_REASON_EXTERNAL_INTERRUPT) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return handle_external_interrupt(vcpu);
-	else if (exit_reason.basic == EXIT_REASON_HLT)
+	}
+	else if (exit_reason.basic == EXIT_REASON_HLT) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return kvm_emulate_halt(vcpu);
-	else if (exit_reason.basic == EXIT_REASON_EPT_MISCONFIG)
+	}
+	else if (exit_reason.basic == EXIT_REASON_EPT_MISCONFIG) {
+		atomic64_add(rdtsc() - start_time, &exit_time);
 		return handle_ept_misconfig(vcpu);
+	}
 #endif
 
 	exit_handler_index = array_index_nospec((u16)exit_reason.basic,
 						kvm_vmx_max_exit_handlers);
 	if (!kvm_vmx_exit_handlers[exit_handler_index])
 		goto unexpected_vmexit;
+
+	atomic64_add(rdtsc() - start_time, &exit_time);
 
 	return kvm_vmx_exit_handlers[exit_handler_index](vcpu);
 
@@ -6456,6 +6487,7 @@ unexpected_vmexit:
 	vcpu->run->internal.ndata = 2;
 	vcpu->run->internal.data[0] = exit_reason.full;
 	vcpu->run->internal.data[1] = vcpu->arch.last_vmentry_cpu;
+	atomic64_add(rdtsc() - start_time, &exit_time);
 	return 0;
 }
 
