@@ -1515,7 +1515,7 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 		printk("eax = 0x4ffffffd \nTotal time spent processing all exits in ebx = %u", ebx);
 		ecx = (atomic64_read(&exit_time) & 0xffffffff);
 		printk("eax = 0x4ffffffd \nTotal time spent processing all exits in ecx = %u", ecx);
-		printk("eax = 0x4ffffffe \nTotal Cycles spent in exit = %llu", atomic64_read(&exit_time));
+		printk("eax = 0x4ffffffd \nTotal Cycles spent in exit = %llu", atomic64_read(&exit_time));
 	} else {
 		kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, false);
 	}
