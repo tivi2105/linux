@@ -14,7 +14,7 @@
     * sudo cp /boot/config-5.15.0-1025-gcp .config (version may vary, use uname -a to get the kernal version).
     * Comment out **CONFIG_SYSTEM_TRUSTED_KEYS** and **CONFIG_SYSTEM_TRUSTED_KEYRING** variables, update the **CONFIG_SYSTEM_REVOCATION_KEYS** value to empty string ("").
 * Execute "make oldconfig" command
-* Before building the kernel, we need to make changes in vmx.c and cpuid.c files for 0xffffffc and 0xffffffd.
+* Before building the kernel, we need to make changes in vmx.c and cpuid.c files for 0xffffffc and 0xffffffd (for assignment 2), 0xfffffff and 0xffffffe (for assignment 3).
 * Buidling kernel
     * sudo make -j 4 modules
     * sudo make -j 8
