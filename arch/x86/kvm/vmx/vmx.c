@@ -6283,6 +6283,7 @@ void dump_vmcs(struct kvm_vcpu *vcpu)
 
 extern atomic64_t total_exits;
 extern atomic64_t exit_time;
+extern atomic64_t i_exit_counter[69];
 
 static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 {
@@ -6290,7 +6291,7 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 	union vmx_exit_reason exit_reason = vmx->exit_reason;
 	u32 vectoring_info = vmx->idt_vectoring_info;
 	u16 exit_handler_index;
-
+	extern atomic_long_t total_cpu_cycles_per_reason[69];
 	u64 start_time = rdtsc();
 
 	atomic64_inc(&total_exits);
@@ -6303,6 +6304,13 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 	 * flushed already.  Note, PML is never enabled in hardware while
 	 * running L2.
 	 */
+
+
+	if(exit_reason.basic <69){
+		atomic64_inc(&i_exit_counter[exit_reason.basic]);
+		atomic64_add((rdtsc()-start_time), &total_cpu_cycles_per_reason[exit_reason.basic]);
+	}
+
 	if (enable_pml && !is_guest_mode(vcpu))
 		vmx_flush_pml_buffer(vcpu);
 
